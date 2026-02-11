@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 260px;
+      padding: 16px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    
+    .logo {
+      font-size: 32px;
+      margin-bottom: 4px;
+    }
+    
+    h1 {
+      font-size: 16px;
+      margin: 0;
+      color: #fff;
+    }
+    
+    .status {
+      text-align: center;
+      padding: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+    }
+    
+    .toggle-btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .toggle-btn.off {
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .toggle-btn.on {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .toggle-btn:hover {
+      transform: translateY(-1px);
+    }
+    
+    .settings {
+      margin-top: 16px;
+    }
+    
+    label {
+      display: block;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    
+    select {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 13px;
+    }
+    
+    select:focus {
+      outline: none;
+      background: rgba(255,255,255,0.15);
+    }
+    
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+    }
+    
+    .hint {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 6px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🎬</div>
+    <h1>YouTube字幕翻译</h1>
+  </div>
+  
+  <div class="status" id="status">
+    等待检测YouTube...
+  </div>
+  
+  <button class="toggle-btn off" id="toggleBtn">
+    点击开启翻译
+  </button>
+  
+  <div class="settings">
+    <label>目标语言</label>
+    <select id="langSelect">
+      <option value="zh-CN">🇨🇳 中文</option>
+      <option value="ja">🇯🇵 日文</option>
+      <option value="ko">🇰🇷 韩文</option>
+      <option value="en">🇺🇸 英文</option>
+    </select>
+  </div>
+  
+  <div class="hint">
+    💡 使用方法：<br>
+    1. 打开YouTube视频<br>
+    2. 点击上方按钮开启<br>
+    3. 暂停视频自动翻译
+  </div>
+  
+  <div class="footer">
+    Powered by Google Translate
+  </div>
+  
+  <script>
+    const toggleBtn = document.getElementById('toggleBtn');
+    const langSelect = document.getElementById('langSelect');
+    const statusEl = document.getElementById('status');
+    
+    let isEnabled = false;
+    
+    // 检测是否在YouTube页面
+    async function checkYouTube() {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab.url.includes('youtube.com')) {
+        statusEl.textContent = '✅ YouTube已检测';
+        return true;
+      }
+      statusEl.textContent = '⚠️ 请打开YouTube页面';
+      return false;
+    }
+    
+    // 切换开关
+    async function toggle() {
+      const isYouTube = await checkYouTube();
+      if (!isYouTube) {
+        alert('请先打开YouTube页面');
+        return;
+      }
+      
+      isEnabled = !isEnabled;
+      
+      // 更新UI
+      if (isEnabled) {
+        toggleBtn.textContent = '翻译已开启 ✓';
+        toggleBtn.classList.remove('off');
+        toggleBtn.classList.add('on');
+      } else {
+        toggleBtn.textContent = '点击开启翻译';
+        toggleBtn.classList.remove('on');
+        toggleBtn.classList.add('off');
+      }
+      
+      // 通知content script
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      chrome.tabs.sendMessage(tab.id, {
+        action: isEnabled ? 'start' : 'stop',
+        lang: langSelect.value
+      });
+      
+      // 保存设置
+      chrome.storage.local.set({ enabled: isEnabled, lang: langSelect.value });
+    }
+    
+    toggleBtn.addEventListener('click', toggle);
+    
+    langSelect.addEventListener('change', async () => {
+      chrome.storage.local.set({ lang: langSelect.value });
+      if (isEnabled) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'start',
+          lang: langSelect.value
+        });
+      }
+    });
+    
+    // 初始化
+    checkYouTube();
+    chrome.storage.local.get(['enabled', 'lang'], (data) => {
+      if (data.enabled) {
+        isEnabled = true;
+        toggleBtn.textContent = '翻译已开启 ✓';
+        toggleBtn.classList.remove('off');
+        toggleBtn.classList.add('on');
+      }
+      if (data.lang) {
+        langSelect.value = data.lang;
+      }
+    });
+  </script>
+</body>
+</html>
